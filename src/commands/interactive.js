@@ -60,6 +60,8 @@ async function startRepl(profileName, globalOpts) {
       return;
     }
 
+    rl.pause();
+
     // Save to history file
     saveHistoryLine(input);
 
@@ -69,8 +71,8 @@ async function startRepl(profileName, globalOpts) {
       const argv = parseInput(input);
       // Carry over global options from the parent session
       const fullArgv = ['node', 'sfcli'];
-      if (globalOpts.profile !== 'default') fullArgv.push('--profile', globalOpts.profile);
-      if (globalOpts.output !== 'table') fullArgv.push('--output', globalOpts.output);
+      if (globalOpts.profile && globalOpts.profile !== 'default') fullArgv.push('--profile', globalOpts.profile);
+      if (globalOpts.output && globalOpts.output !== 'table') fullArgv.push('--output', globalOpts.output);
       if (globalOpts.verbose) fullArgv.push('--verbose');
       if (globalOpts.color === false) fullArgv.push('--no-color');
       if (globalOpts.dryRun) fullArgv.push('--dry-run');
@@ -100,6 +102,7 @@ async function startRepl(profileName, globalOpts) {
     }
 
     console.log(); // blank line between commands
+    rl.resume();
     rl.prompt();
   });
 

@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { writeFileSync, copyFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '../api/client.js';
 import { getActiveProfileName, getProfileConfig, getConfig, getConfigDir } from '../config/index.js';
 import { FileMakerClient } from '../filemaker/client.js';
@@ -38,10 +39,11 @@ export function registerSyncCommands(program) {
     .option('--status <status>', 'Filter by status (jobs)')
     .action(async (entity, options) => {
       const globalOpts = program.opts();
+      let fmClient;
       try {
         const entities = entity === 'all' ? ENTITY_TYPES : [entity];
         const sfClient = initSfClient(globalOpts);
-        const fmClient = await createFmClient();
+        fmClient = await createFmClient();
         const mapping = loadMapping();
         const strategy = getConfig().get('defaults.sync_conflict_strategy') || null;
 
@@ -54,11 +56,11 @@ export function registerSyncCommands(program) {
           });
           printStats('Pull', ent, stats, globalOpts.dryRun);
         }
-
-        await fmClient.disconnect();
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
+      } finally {
+        if (fmClient) await fmClient.disconnect();
       }
     });
 
@@ -68,10 +70,11 @@ export function registerSyncCommands(program) {
     .description('Push: FileMaker → Service Fusion')
     .action(async (entity) => {
       const globalOpts = program.opts();
+      let fmClient;
       try {
         const entities = entity === 'all' ? ENTITY_TYPES : [entity];
         const sfClient = initSfClient(globalOpts);
-        const fmClient = await createFmClient();
+        fmClient = await createFmClient();
         const mapping = loadMapping();
 
         for (const ent of entities) {
@@ -81,11 +84,11 @@ export function registerSyncCommands(program) {
           });
           printStats('Push', ent, stats, globalOpts.dryRun);
         }
-
-        await fmClient.disconnect();
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
+      } finally {
+        if (fmClient) await fmClient.disconnect();
       }
     });
 
@@ -96,10 +99,11 @@ export function registerSyncCommands(program) {
     .option('--since <date>', 'Only records updated since date')
     .action(async (entity, options) => {
       const globalOpts = program.opts();
+      let fmClient;
       try {
         const entities = entity === 'all' ? ENTITY_TYPES : [entity];
         const sfClient = initSfClient(globalOpts);
-        const fmClient = await createFmClient();
+        fmClient = await createFmClient();
         const mapping = loadMapping();
         const strategy = getConfig().get('defaults.sync_conflict_strategy') || null;
 
@@ -113,11 +117,11 @@ export function registerSyncCommands(program) {
           printStats('Pull', ent, result.pull, globalOpts.dryRun);
           printStats('Push', ent, result.push, globalOpts.dryRun);
         }
-
-        await fmClient.disconnect();
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
+      } finally {
+        if (fmClient) await fmClient.disconnect();
       }
     });
 
@@ -270,7 +274,7 @@ export function registerSyncCommands(program) {
         if (!overwrite) return;
       }
       // Copy default mapping from package
-      const src = join(new URL('.', import.meta.url).pathname, '../../fm-mapping.json');
+      const src = join(dirname(fileURLToPath(import.meta.url)), '../../fm-mapping.json');
       if (existsSync(src)) {
         copyFileSync(src, dest);
       } else {

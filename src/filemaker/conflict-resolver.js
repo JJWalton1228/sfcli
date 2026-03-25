@@ -91,8 +91,10 @@ export function autoResolveStrategy(strategy, sfData, fmData) {
     case 'fm-wins':
       return 'fm';
     case 'newest-wins': {
-      const sfTime = sfData?.updated_at ? new Date(sfData.updated_at).getTime() : 0;
-      const fmTime = fmData?.modificationTimestamp ? new Date(fmData.modificationTimestamp).getTime() : 0;
+      const sfRaw = sfData?.updated_at ? new Date(sfData.updated_at).getTime() : 0;
+      const fmRaw = fmData?.modificationTimestamp ? new Date(fmData.modificationTimestamp).getTime() : 0;
+      const sfTime = Number.isNaN(sfRaw) ? 0 : sfRaw;
+      const fmTime = Number.isNaN(fmRaw) ? 0 : fmRaw;
       return sfTime >= fmTime ? 'sf' : 'fm';
     }
     default:

@@ -83,7 +83,9 @@ export function registerEstimateCommands(program) {
         if (options.json) {
           data = JSON.parse(options.json);
         } else if (options.customer) {
-          data = { customer_id: parseInt(options.customer, 10) };
+          const custId = parseInt(options.customer, 10);
+          if (Number.isNaN(custId)) throw new Error('Invalid customer ID: must be a number');
+          data = { customer_id: custId };
           if (options.description) data.description = options.description;
         } else {
           data = await inquirer.prompt([
@@ -93,7 +95,11 @@ export function registerEstimateCommands(program) {
           for (const key of Object.keys(data)) {
             if (!data[key]) delete data[key];
           }
-          if (data.customer_id) data.customer_id = parseInt(data.customer_id, 10);
+          if (data.customer_id) {
+            const parsed = parseInt(data.customer_id, 10);
+            if (Number.isNaN(parsed)) throw new Error('Invalid customer ID: must be a number');
+            data.customer_id = parsed;
+          }
         }
 
         if (globalOpts.dryRun) {

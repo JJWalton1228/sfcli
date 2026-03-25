@@ -1,7 +1,10 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek.js';
 import { readFileSync } from 'fs';
+
+dayjs.extend(isoWeek);
 import { createClient } from '../api/client.js';
 import { createJobsApi } from '../api/jobs.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
@@ -85,8 +88,8 @@ export function registerJobCommands(program) {
       const globalOpts = program.opts();
       try {
         const { api } = initApi(globalOpts);
-        const start = dayjs().startOf('week').format('YYYY-MM-DD');
-        const end = dayjs().endOf('week').format('YYYY-MM-DD');
+        const start = dayjs().startOf('isoWeek').format('YYYY-MM-DD');
+        const end = dayjs().endOf('isoWeek').format('YYYY-MM-DD');
         const items = await api.search({ scheduled_after: start, scheduled_before: end });
         output(items, { format: globalOpts.output, columns: JOB_COLUMNS, headers: JOB_HEADERS });
       } catch (err) {
@@ -131,7 +134,9 @@ export function registerJobCommands(program) {
         } else if (options.json) {
           data = JSON.parse(options.json);
         } else if (options.customer) {
-          data = { customer_id: parseInt(options.customer, 10) };
+          const custId = parseInt(options.customer, 10);
+          if (Number.isNaN(custId)) throw new Error('Invalid customer ID: must be a number');
+          data = { customer_id: custId };
           if (options.description) data.description = options.description;
           if (options.scheduled) data.scheduled_start = options.scheduled;
         } else {
@@ -144,7 +149,11 @@ export function registerJobCommands(program) {
           for (const key of Object.keys(data)) {
             if (!data[key]) delete data[key];
           }
-          if (data.customer_id) data.customer_id = parseInt(data.customer_id, 10);
+          if (data.customer_id) {
+            const parsed = parseInt(data.customer_id, 10);
+            if (Number.isNaN(parsed)) throw new Error('Invalid customer ID: must be a number');
+            data.customer_id = parsed;
+          }
         }
 
         if (globalOpts.dryRun) {
@@ -255,7 +264,9 @@ export function registerJobCommands(program) {
           console.log(chalk.yellow(`Dry run — would assign tech ${options.technician} to job ${id}`));
           return;
         }
-        await api.update(id, { technician_ids: [parseInt(options.technician, 10)] });
+        const techId = parseInt(options.technician, 10);
+        if (Number.isNaN(techId)) throw new Error('Invalid technician ID: must be a number');
+        await api.update(id, { technician_ids: [techId] });
         console.log(chalk.green(`Technician ${options.technician} assigned to job ${id}.`));
       } catch (err) {
         console.error(chalk.red(err.message));

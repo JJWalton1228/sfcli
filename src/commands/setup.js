@@ -36,8 +36,8 @@ export async function checkFirstRun(program) {
   // Step 1: Service Fusion credentials
   console.log(chalk.bold('\n  Step 1: Service Fusion API Credentials\n'));
   const sfCreds = await inquirer.prompt([
-    { type: 'input', name: 'clientId', message: 'Client ID:' },
-    { type: 'password', name: 'clientSecret', message: 'Client Secret:' },
+    { type: 'input', name: 'clientId', message: 'Client ID:', validate: (v) => v.trim() ? true : 'Client ID is required' },
+    { type: 'password', name: 'clientSecret', message: 'Client Secret:', validate: (v) => v ? true : 'Client Secret is required' },
   ]);
 
   console.log(chalk.dim('\n  Authenticating with Service Fusion...'));
@@ -63,10 +63,10 @@ export async function checkFirstRun(program) {
 
   if (configureFm) {
     const fmCreds = await inquirer.prompt([
-      { type: 'input', name: 'host', message: 'FileMaker Server URL (https://...):' },
-      { type: 'input', name: 'database', message: 'Database name:' },
-      { type: 'input', name: 'username', message: 'API username:' },
-      { type: 'password', name: 'password', message: 'API password:' },
+      { type: 'input', name: 'host', message: 'FileMaker Server URL (https://):', validate: (v) => v.startsWith('https://') ? true : 'URL must start with https://' },
+      { type: 'input', name: 'database', message: 'Database name:', validate: (v) => v.trim() ? true : 'Database name is required' },
+      { type: 'input', name: 'username', message: 'API username:', validate: (v) => v.trim() ? true : 'Username is required' },
+      { type: 'password', name: 'password', message: 'API password:', validate: (v) => v ? true : 'Password is required' },
     ]);
 
     const config = getConfig();

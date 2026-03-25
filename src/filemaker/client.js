@@ -33,7 +33,7 @@ export class FileMakerClient {
     }
   }
 
-  async request(method, path, data = null) {
+  async request(method, path, data = null, _retried = false) {
     if (!this.token) await this.connect();
 
     const url = `${this.baseUrl}${path}`;
@@ -53,11 +53,10 @@ export class FileMakerClient {
       return response.data?.response ?? response.data;
     } catch (err) {
       // Re-auth on 401 once
-      if (err.response?.status === 401 && !err._fmRetried) {
+      if (err.response?.status === 401 && !_retried) {
         this.logger.debug('FM token expired, re-authenticating...');
         await this.connect();
-        err._fmRetried = true;
-        return this.request(method, path, data);
+        return this.request(method, path, data, true);
       }
       const msg = err.response?.data?.messages?.[0]?.message || err.message;
       throw new Error(`FileMaker API error: ${msg}`);
@@ -100,8 +99,8 @@ export class FileMakerClient {
       const result = await this.request('post', path, { query });
       return result.data || [];
     } catch (err) {
-      // FM returns 401 error code for "no records found"
-      if (err.message?.includes('401') || err.message?.includes('No records match')) {
+      // FileMaker error code 401 = "No records match the request" (not HTTP 401)
+      if (err.message?.includes('No records match')) {
         return [];
       }
       throw err;
