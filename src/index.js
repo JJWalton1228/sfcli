@@ -8,6 +8,7 @@ import { registerTechnicianCommands } from './commands/technicians.js';
 import { registerEquipmentCommands } from './commands/equipment.js';
 import { registerInvoiceCommands } from './commands/invoices.js';
 import { registerReportCommands } from './commands/reports.js';
+import { registerInteractiveCommands } from './commands/interactive.js';
 
 export function createProgram() {
   const program = new Command();
@@ -38,6 +39,7 @@ export function createProgram() {
   registerEquipmentCommands(program);
   registerInvoiceCommands(program);
   registerReportCommands(program);
+  registerInteractiveCommands(program);
 
   return program;
 }
