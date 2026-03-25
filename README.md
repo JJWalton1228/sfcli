@@ -1,0 +1,2 @@
+# sfcli
+Service Fusion CLI
