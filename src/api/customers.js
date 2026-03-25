@@ -37,5 +37,15 @@ export function createCustomersApi(client) {
     async search(params = {}) {
       return fetchAll(client, '/customers', params, { showProgress: false });
     },
+
+    async create(data) {
+      const response = await client.post('/customers', data);
+      return response.data;
+    },
+
+    async update(id, data) {
+      const response = await client.put(`/customers/${id}`, data);
+      return response.data;
+    },
   };
 }

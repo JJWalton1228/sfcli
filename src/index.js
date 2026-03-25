@@ -2,6 +2,11 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { registerAuthCommands } from './commands/auth.js';
 import { registerCustomerCommands } from './commands/customers.js';
+import { registerJobCommands } from './commands/jobs.js';
+import { registerEstimateCommands } from './commands/estimates.js';
+import { registerTechnicianCommands } from './commands/technicians.js';
+import { registerEquipmentCommands } from './commands/equipment.js';
+import { registerInvoiceCommands } from './commands/invoices.js';
 
 export function createProgram() {
   const program = new Command();
@@ -26,6 +31,11 @@ export function createProgram() {
 
   registerAuthCommands(program);
   registerCustomerCommands(program);
+  registerJobCommands(program);
+  registerEstimateCommands(program);
+  registerTechnicianCommands(program);
+  registerEquipmentCommands(program);
+  registerInvoiceCommands(program);
 
   return program;
 }

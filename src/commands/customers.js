@@ -1,4 +1,6 @@
 import chalk from 'chalk';
+import inquirer from 'inquirer';
+import { readFileSync } from 'fs';
 import { createClient } from '../api/client.js';
 import { createCustomersApi } from '../api/customers.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
@@ -98,6 +100,102 @@ export function registerCustomerCommands(program) {
         process.exitCode = 1;
       }
     });
+
+  // --- create ---
+  customers
+    .command('create')
+    .description('Create a customer')
+    .option('--json <data>', 'JSON data string')
+    .option('--from-file <path>', 'Read JSON from file')
+    .action(async (options) => {
+      const globalOpts = program.opts();
+      try {
+        const { api } = initApi(globalOpts);
+        let data;
+
+        if (options.fromFile) {
+          data = JSON.parse(readFileSync(options.fromFile, 'utf8'));
+        } else if (options.json) {
+          data = JSON.parse(options.json);
+        } else {
+          // Interactive prompts
+          data = await inquirer.prompt([
+            { type: 'input', name: 'customer_name', message: 'Customer name:' },
+            { type: 'input', name: 'contact_first_name', message: 'Contact first name:' },
+            { type: 'input', name: 'contact_last_name', message: 'Contact last name:' },
+            { type: 'input', name: 'phone', message: 'Phone:' },
+            { type: 'input', name: 'email', message: 'Email:' },
+            { type: 'input', name: 'street_1', message: 'Street:' },
+            { type: 'input', name: 'city', message: 'City:' },
+            { type: 'input', name: 'state', message: 'State:' },
+            { type: 'input', name: 'zip_code', message: 'Zip code:' },
+          ]);
+          // Remove empty values
+          for (const key of Object.keys(data)) {
+            if (!data[key]) delete data[key];
+          }
+        }
+
+        if (globalOpts.dryRun) {
+          console.log(chalk.yellow('Dry run — would create:'));
+          console.log(JSON.stringify(data, null, 2));
+          return;
+        }
+
+        const result = await api.create(data);
+        console.log(chalk.green(`Customer created (ID: ${result.id ?? result.data?.id ?? 'unknown'}).`));
+        outputDetail(result.data ?? result, { format: globalOpts.output, headers: CUSTOMER_HEADERS });
+      } catch (err) {
+        console.error(chalk.red(err.message));
+        process.exitCode = 1;
+      }
+    });
+
+  // --- update ---
+  customers
+    .command('update <id>')
+    .description('Update a customer')
+    .option('--set <field=value...>', 'Set field values (repeatable)', collect, [])
+    .option('--json <data>', 'JSON data string')
+    .action(async (id, options) => {
+      const globalOpts = program.opts();
+      try {
+        const { api } = initApi(globalOpts);
+        let data;
+
+        if (options.json) {
+          data = JSON.parse(options.json);
+        } else if (options.set.length > 0) {
+          data = {};
+          for (const pair of options.set) {
+            const eqIdx = pair.indexOf('=');
+            if (eqIdx === -1) throw new Error(`Invalid --set format: "${pair}". Use field=value.`);
+            data[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+          }
+        } else {
+          console.error(chalk.red('Provide --set field=value or --json to update.'));
+          process.exitCode = 1;
+          return;
+        }
+
+        if (globalOpts.dryRun) {
+          console.log(chalk.yellow(`Dry run — would update customer ${id}:`));
+          console.log(JSON.stringify(data, null, 2));
+          return;
+        }
+
+        const result = await api.update(id, data);
+        console.log(chalk.green(`Customer ${id} updated.`));
+        outputDetail(result.data ?? result, { format: globalOpts.output, headers: CUSTOMER_HEADERS });
+      } catch (err) {
+        console.error(chalk.red(err.message));
+        process.exitCode = 1;
+      }
+    });
+}
+
+function collect(value, previous) {
+  return previous.concat([value]);
 }
 
 function initApi(globalOpts) {
