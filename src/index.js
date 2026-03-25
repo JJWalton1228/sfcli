@@ -9,6 +9,7 @@ import { registerEquipmentCommands } from './commands/equipment.js';
 import { registerInvoiceCommands } from './commands/invoices.js';
 import { registerReportCommands } from './commands/reports.js';
 import { registerInteractiveCommands } from './commands/interactive.js';
+import { registerSyncCommands } from './commands/sync.js';
 
 export function createProgram() {
   const program = new Command();
@@ -40,6 +41,7 @@ export function createProgram() {
   registerInvoiceCommands(program);
   registerReportCommands(program);
   registerInteractiveCommands(program);
+  registerSyncCommands(program);
 
   return program;
 }

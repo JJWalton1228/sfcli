@@ -1,0 +1,97 @@
+{
+  "customers": {
+    "sf_endpoint": "/customers",
+    "fm_layout": "API_Customers",
+    "id_field": { "sf": "id", "fm": "SF_CustomerID" },
+    "sync_key": "sf_id",
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "customer_name": "CompanyName",
+      "contact_first_name": "FirstName",
+      "contact_last_name": "LastName",
+      "street_1": "Address1",
+      "street_2": "Address2",
+      "city": "City",
+      "state": "State",
+      "zip_code": "ZipCode",
+      "email": "Email",
+      "phone": "Phone",
+      "mobile_phone": "MobilePhone",
+      "notes": "Notes"
+    },
+    "transforms": {
+      "phone": "normalize_phone",
+      "state": "uppercase"
+    }
+  },
+  "jobs": {
+    "sf_endpoint": "/jobs",
+    "fm_layout": "API_Jobs",
+    "id_field": { "sf": "id", "fm": "SF_JobID" },
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "id": "SF_JobID",
+      "customer_id": "SF_CustomerID",
+      "status": "JobStatus",
+      "description": "Description",
+      "job_type": "JobType",
+      "scheduled_start": "ScheduledStart",
+      "scheduled_end": "ScheduledEnd",
+      "total": "TotalAmount"
+    }
+  },
+  "estimates": {
+    "sf_endpoint": "/estimates",
+    "fm_layout": "API_Estimates",
+    "id_field": { "sf": "id", "fm": "SF_EstimateID" },
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "id": "SF_EstimateID",
+      "customer_id": "SF_CustomerID",
+      "status": "EstimateStatus",
+      "description": "Description",
+      "total": "TotalAmount"
+    }
+  },
+  "technicians": {
+    "sf_endpoint": "/technicians",
+    "fm_layout": "API_Technicians",
+    "id_field": { "sf": "id", "fm": "SF_TechID" },
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "id": "SF_TechID",
+      "first_name": "FirstName",
+      "last_name": "LastName",
+      "email": "Email",
+      "phone": "Phone"
+    }
+  },
+  "equipment": {
+    "sf_endpoint": "/equipment",
+    "fm_layout": "API_Equipment",
+    "id_field": { "sf": "id", "fm": "SF_EquipmentID" },
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "id": "SF_EquipmentID",
+      "customer_id": "SF_CustomerID",
+      "name": "EquipmentName",
+      "model": "Model",
+      "serial": "SerialNumber",
+      "location": "Location"
+    }
+  },
+  "invoices": {
+    "sf_endpoint": "/invoices",
+    "fm_layout": "API_Invoices",
+    "id_field": { "sf": "id", "fm": "SF_InvoiceID" },
+    "last_sync_field": "SF_LastSync",
+    "field_map": {
+      "id": "SF_InvoiceID",
+      "job_id": "SF_JobID",
+      "customer_id": "SF_CustomerID",
+      "status": "InvoiceStatus",
+      "total": "TotalAmount",
+      "balance_due": "BalanceDue"
+    }
+  }
+}
