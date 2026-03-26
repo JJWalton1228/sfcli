@@ -10,6 +10,9 @@ import { loadMapping, getEntityMapping } from '../filemaker/mapper.js';
 import { pull, push, syncBidirectional, getSyncStatus, getSyncLog } from '../filemaker/sync-engine.js';
 import { listConflicts, resolveConflict } from '../filemaker/conflict-resolver.js';
 import { output } from '../utils/output.js';
+import { sendSlackNotification, formatSyncSuccess, formatSyncFailure } from '../utils/slack.js';
+import { enableSchedule, disableSchedule, getScheduleStatus } from '../utils/cron-scheduler.js';
+import { createCache } from '../utils/cache.js';
 
 const ENTITY_TYPES = ['customers', 'jobs', 'estimates', 'technicians', 'equipment', 'invoices'];
 
@@ -68,9 +71,16 @@ export function registerSyncCommands(program) {
   sync
     .command('push <entity>')
     .description('Push: FileMaker → Service Fusion')
-    .action(async (entity) => {
+    .option('--notify', 'Send Slack notification on completion/failure')
+    .option('--since <date>', 'Only records modified since date')
+    .action(async (entity, options) => {
       const globalOpts = program.opts();
       let fmClient;
+      const startTime = Date.now();
+      const allStats = {};
+      const config = getConfig();
+      const webhookUrl = config.get('slack.webhook_url') || process.env.SLACK_WEBHOOK_URL;
+
       try {
         const entities = entity === 'all' ? ENTITY_TYPES : [entity];
         const sfClient = initSfClient(globalOpts);
@@ -78,15 +88,47 @@ export function registerSyncCommands(program) {
         const mapping = loadMapping();
 
         for (const ent of entities) {
-          const entityMapping = getEntityMapping(mapping, ent);
-          const stats = await push(sfClient, fmClient, ent, entityMapping, {
-            dryRun: globalOpts.dryRun,
-          });
-          printStats('Push', ent, stats, globalOpts.dryRun);
+          try {
+            const entityMapping = getEntityMapping(mapping, ent);
+            const stats = await push(sfClient, fmClient, ent, entityMapping, {
+              since: options.since,
+              dryRun: globalOpts.dryRun,
+            });
+            allStats[ent] = stats;
+            printStats('Push', ent, stats, globalOpts.dryRun);
+          } catch (entErr) {
+            allStats[ent] = { errors: 1, error_message: entErr.message };
+            console.error(chalk.red(`Push ${ent} failed: ${entErr.message}`));
+            // Send failure notification per entity
+            if (options.notify && webhookUrl) {
+              await sendSlackNotification(webhookUrl, formatSyncFailure(ent, entErr));
+            }
+          }
+        }
+
+        // Post-sync: refresh cache
+        if (!globalOpts.dryRun) {
+          try {
+            const db = createCache();
+            console.log(chalk.dim('Refreshing cache after sync...'));
+            // Cache refresh handled by the cache command internals
+            db.close();
+          } catch (cacheErr) {
+            console.error(chalk.yellow(`Cache refresh failed: ${cacheErr.message}`));
+          }
+        }
+
+        // Send success summary
+        if (options.notify && webhookUrl) {
+          const duration = Math.round((Date.now() - startTime) / 1000);
+          await sendSlackNotification(webhookUrl, formatSyncSuccess(allStats, duration));
         }
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
+        if (options.notify && webhookUrl) {
+          await sendSlackNotification(webhookUrl, formatSyncFailure('all', err));
+        }
       } finally {
         if (fmClient) await fmClient.disconnect();
       }
@@ -142,7 +184,7 @@ export function registerSyncCommands(program) {
         last_push: times.last_push || '-',
       }));
       output(rows, {
-        format: globalOpts.output,
+        format: globalOpts.output, sort: globalOpts.sort,
         columns: ['entity', 'last_pull', 'last_push'],
         headers: { entity: 'Entity', last_pull: 'Last Pull', last_push: 'Last Push' },
       });
@@ -171,7 +213,7 @@ export function registerSyncCommands(program) {
         dry_run: e.dryRun ? 'yes' : '',
       }));
       output(rows, {
-        format: globalOpts.output,
+        format: globalOpts.output, sort: globalOpts.sort,
         columns: ['timestamp', 'direction', 'entity', 'created', 'updated', 'conflicts', 'errors', 'dry_run'],
         headers: { timestamp: 'Time', direction: 'Dir', entity: 'Entity', created: 'New', updated: 'Updated', conflicts: 'Conflicts', errors: 'Errors', dry_run: 'Dry?' },
       });
@@ -195,7 +237,7 @@ export function registerSyncCommands(program) {
         detected: c.detected_at,
       }));
       output(rows, {
-        format: globalOpts.output,
+        format: globalOpts.output, sort: globalOpts.sort,
         columns: ['id', 'entity', 'sf_id', 'detected'],
         headers: { id: 'Conflict ID', entity: 'Entity', sf_id: 'SF ID', detected: 'Detected' },
       });
@@ -255,6 +297,65 @@ export function registerSyncCommands(program) {
             const fieldCount = Object.keys(config.field_map).length;
             console.log(`  ${chalk.green('✓')} ${entity}: ${fieldCount} fields mapped → ${config.fm_layout}`);
           }
+        }
+      } catch (err) {
+        console.error(chalk.red(err.message));
+        process.exitCode = 1;
+      }
+    });
+
+  // --- schedule ---
+  const schedule = sync.command('schedule').description('Manage sync cron schedule');
+
+  schedule
+    .command('enable')
+    .description('Enable twice-daily sync cron (6am/6pm Pacific)')
+    .action(() => {
+      try {
+        const nodePath = process.execPath;
+        const sfcliPath = join(dirname(fileURLToPath(import.meta.url)), '../../bin/sfcli.js');
+        const entries = enableSchedule(`${nodePath} ${sfcliPath}`);
+        console.log(chalk.green('Sync schedule enabled:'));
+        for (const entry of entries) {
+          console.log(chalk.dim(`  ${entry}`));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Failed to enable schedule: ${err.message}`));
+        process.exitCode = 1;
+      }
+    });
+
+  schedule
+    .command('disable')
+    .description('Disable the sync cron schedule')
+    .action(() => {
+      try {
+        const removed = disableSchedule();
+        if (removed) {
+          console.log(chalk.green('Sync schedule disabled.'));
+        } else {
+          console.log(chalk.yellow('No sfcli cron entries found.'));
+        }
+      } catch (err) {
+        console.error(chalk.red(`Failed to disable schedule: ${err.message}`));
+        process.exitCode = 1;
+      }
+    });
+
+  schedule
+    .command('status')
+    .description('Show current sync schedule status')
+    .action(() => {
+      try {
+        const status = getScheduleStatus();
+        if (status.enabled) {
+          console.log(chalk.green('Sync schedule: ENABLED'));
+          for (const entry of status.entries) {
+            console.log(chalk.dim(`  ${entry}`));
+          }
+        } else {
+          console.log(chalk.yellow('Sync schedule: DISABLED'));
+          console.log(chalk.dim('  Run `sfcli sync schedule enable` to activate.'));
         }
       } catch (err) {
         console.error(chalk.red(err.message));

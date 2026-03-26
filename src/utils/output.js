@@ -1,6 +1,7 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
 import { stringify } from 'csv-stringify/sync';
+import { parseSortFlag, sortRows } from './sort.js';
 
 /**
  * Format and print data based on the --output flag.
@@ -11,7 +12,7 @@ import { stringify } from 'csv-stringify/sync';
  * @param {Object} [options.headers] - Map of key -> display header name
  * @param {string} [options.idField] - Field to use for quiet mode (default: 'id')
  */
-export function output(rows, { format = 'table', columns, headers = {}, idField = 'id' } = {}) {
+export function output(rows, { format = 'table', columns, headers = {}, idField = 'id', sort } = {}) {
   if (!rows || rows.length === 0) {
     if (format === 'json') {
       console.log('[]');
@@ -21,6 +22,12 @@ export function output(rows, { format = 'table', columns, headers = {}, idField 
       console.log(chalk.yellow('No results found.'));
     }
     return;
+  }
+
+  // Apply sorting if --sort provided
+  if (sort) {
+    const sortSpec = parseSortFlag(sort);
+    rows = sortRows(rows, sortSpec);
   }
 
   // Auto-detect columns from first row if not provided

@@ -9,17 +9,27 @@ import { createClient } from '../api/client.js';
 import { createJobsApi } from '../api/jobs.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
+import { createCache } from '../utils/cache.js';
+import { createCacheAwareSearch } from '../utils/cache-search.js';
+import { fetchAll } from '../utils/paginator.js';
 
-const JOB_COLUMNS = ['id', 'customer_id', 'status', 'description', 'scheduled_start', 'total'];
+const JOB_COLUMNS = ['number', 'customer_name', 'status', 'description', 'start_date', 'total'];
 const JOB_HEADERS = {
   id: 'ID',
-  customer_id: 'Customer',
+  number: 'Job #',
+  customer_id: 'Cust ID',
+  customer_name: 'Customer',
   status: 'Status',
+  sub_status: 'Sub-Status',
   description: 'Description',
-  job_type: 'Type',
-  scheduled_start: 'Scheduled',
-  scheduled_end: 'End',
+  category: 'Category',
+  start_date: 'Start',
+  end_date: 'End',
   total: 'Total',
+  due_total: 'Due',
+  payment_status: 'Payment',
+  city: 'City',
+  state_prov: 'State',
   created_at: 'Created',
 };
 
@@ -53,7 +63,7 @@ export function registerJobCommands(program) {
         if (options.completedBefore) params.completed_before = options.completedBefore;
 
         const items = await api.list(params, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, columns: JOB_COLUMNS, headers: JOB_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -73,7 +83,7 @@ export function registerJobCommands(program) {
           scheduled_after: today,
           scheduled_before: dayjs().add(1, 'day').format('YYYY-MM-DD'),
         });
-        output(items, { format: globalOpts.output, columns: JOB_COLUMNS, headers: JOB_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -91,7 +101,7 @@ export function registerJobCommands(program) {
         const start = dayjs().startOf('isoWeek').format('YYYY-MM-DD');
         const end = dayjs().endOf('isoWeek').format('YYYY-MM-DD');
         const items = await api.search({ scheduled_after: start, scheduled_before: end });
-        output(items, { format: globalOpts.output, columns: JOB_COLUMNS, headers: JOB_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -107,7 +117,7 @@ export function registerJobCommands(program) {
       try {
         const { api } = initApi(globalOpts);
         const job = await api.get(id);
-        outputDetail(job, { format: globalOpts.output, headers: JOB_HEADERS });
+        outputDetail(job, { format: globalOpts.output, sort: globalOpts.sort, headers: JOB_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

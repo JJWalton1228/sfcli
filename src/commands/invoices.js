@@ -4,14 +4,16 @@ import { createInvoicesApi } from '../api/invoices.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
 
-const INVOICE_COLUMNS = ['id', 'job_id', 'customer_id', 'status', 'total', 'balance_due'];
+const INVOICE_COLUMNS = ['number', 'customer', 'is_paid', 'total', 'date'];
 const INVOICE_HEADERS = {
   id: 'ID',
-  job_id: 'Job',
-  customer_id: 'Customer',
-  status: 'Status',
+  number: 'Inv #',
+  customer: 'Customer',
+  is_paid: 'Paid',
   total: 'Total',
-  balance_due: 'Balance Due',
+  date: 'Date',
+  terms: 'Terms',
+  po_number: 'PO #',
   created_at: 'Created',
 };
 
@@ -37,7 +39,7 @@ export function registerInvoiceCommands(program) {
         if (options.overdue) params.overdue = true;
         if (options.createdAfter) params.created_after = options.createdAfter;
         const items = await api.list(params, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, columns: INVOICE_COLUMNS, headers: INVOICE_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: INVOICE_COLUMNS, headers: INVOICE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -52,7 +54,7 @@ export function registerInvoiceCommands(program) {
       try {
         const { api } = initApi(globalOpts);
         const invoice = await api.get(id);
-        outputDetail(invoice, { format: globalOpts.output, headers: INVOICE_HEADERS });
+        outputDetail(invoice, { format: globalOpts.output, sort: globalOpts.sort, headers: INVOICE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

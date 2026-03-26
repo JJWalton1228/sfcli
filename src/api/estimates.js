@@ -1,3 +1,4 @@
+import { SF_PAGE_SIZE } from './constants.js';
 import { fetchAll, fetchPage } from '../utils/paginator.js';
 
 export function createEstimatesApi(client) {
@@ -5,20 +6,32 @@ export function createEstimatesApi(client) {
     async list(params = {}, options = {}) {
       if (options.all) return fetchAll(client, '/estimates', params);
       if (options.limit) {
-        const result = await fetchPage(client, '/estimates', params, { perPage: options.limit });
-        return result.items;
+        return (await fetchAll(client, '/estimates', params, {
+          maxPages: Math.ceil(options.limit / SF_PAGE_SIZE),
+          showProgress: false,
+        })).slice(0, options.limit);
       }
       const result = await fetchPage(client, '/estimates', params);
       return result.items;
     },
 
     async get(id) {
-      const response = await client.get(`/estimates/${id}`);
+      const response = await client.get(`/estimates/${id}`, {
+        params: { expand: 'products,services,other_charges' },
+      });
       return response.data;
     },
 
     async search(params = {}) {
-      return fetchAll(client, '/estimates', params, { showProgress: false });
+      const { q, ...rest } = params;
+      const all = await fetchAll(client, '/estimates', rest);
+      if (!q) return all;
+      const term = q.toLowerCase();
+      return all.filter(e =>
+        e.description?.toLowerCase().includes(term) ||
+        e.customer_name?.toLowerCase().includes(term) ||
+        String(e.number).includes(term)
+      );
     },
 
     async create(data) {

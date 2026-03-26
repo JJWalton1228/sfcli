@@ -5,13 +5,18 @@ import { createEstimatesApi } from '../api/estimates.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
 
-const ESTIMATE_COLUMNS = ['id', 'customer_id', 'status', 'description', 'total'];
+const ESTIMATE_COLUMNS = ['number', 'customer_name', 'status', 'description', 'total'];
 const ESTIMATE_HEADERS = {
   id: 'ID',
-  customer_id: 'Customer',
+  number: 'Est #',
+  customer_id: 'Cust ID',
+  customer_name: 'Customer',
   status: 'Status',
   description: 'Description',
   total: 'Total',
+  due_total: 'Due',
+  city: 'City',
+  state_prov: 'State',
   created_at: 'Created',
 };
 
@@ -31,7 +36,7 @@ export function registerEstimateCommands(program) {
         const params = {};
         if (options.customer) params.customer_id = options.customer;
         const items = await api.list(params, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -46,7 +51,7 @@ export function registerEstimateCommands(program) {
       try {
         const { api } = initApi(globalOpts);
         const estimate = await api.get(id);
-        outputDetail(estimate, { format: globalOpts.output, headers: ESTIMATE_HEADERS });
+        outputDetail(estimate, { format: globalOpts.output, sort: globalOpts.sort, headers: ESTIMATE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -61,7 +66,7 @@ export function registerEstimateCommands(program) {
       try {
         const { api } = initApi(globalOpts);
         const items = await api.search({ q: query });
-        output(items, { format: globalOpts.output, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

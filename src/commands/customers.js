@@ -2,9 +2,12 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { readFileSync } from 'fs';
 import { createClient } from '../api/client.js';
-import { createCustomersApi } from '../api/customers.js';
+import { createCustomersApi, flattenCustomer } from '../api/customers.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
+import { createCache } from '../utils/cache.js';
+import { createCacheAwareSearch } from '../utils/cache-search.js';
+import { fetchAll } from '../utils/paginator.js';
 
 const CUSTOMER_COLUMNS = ['id', 'customer_name', 'phone', 'email', 'city', 'state'];
 const CUSTOMER_HEADERS = {
@@ -35,7 +38,7 @@ export function registerCustomerCommands(program) {
         const { client, api } = initApi(globalOpts);
         const items = await api.list({}, { all: options.all, limit: options.limit });
         output(items, {
-          format: globalOpts.output,
+          format: globalOpts.output, sort: globalOpts.sort,
           columns: CUSTOMER_COLUMNS,
           headers: CUSTOMER_HEADERS,
         });
@@ -55,7 +58,7 @@ export function registerCustomerCommands(program) {
         const { client, api } = initApi(globalOpts);
         const customer = await api.get(id);
         outputDetail(customer, {
-          format: globalOpts.output,
+          format: globalOpts.output, sort: globalOpts.sort,
           headers: CUSTOMER_HEADERS,
         });
       } catch (err) {
@@ -79,19 +82,31 @@ export function registerCustomerCommands(program) {
       const globalOpts = program.opts();
       try {
         const { client, api } = initApi(globalOpts);
-        const params = {};
-        if (query) params.q = query;
-        if (options.phone) params.phone = options.phone;
-        if (options.email) params.email = options.email;
-        if (options.city) params.city = options.city;
-        if (options.state) params.state = options.state;
-        if (options.createdAfter) params.created_after = options.createdAfter;
-        if (options.createdBefore) params.created_before = options.createdBefore;
-        if (options.tag) params.tag = options.tag;
+        const filters = {};
+        if (query) filters.q = query;
+        if (options.phone) filters.phone = options.phone;
+        if (options.email) filters.email = options.email;
+        if (options.city) filters.city = options.city;
+        if (options.state) filters.state = options.state;
 
-        const items = await api.search(params);
+        // Use cache-aware search
+        const db = createCache();
+        const apiFetcher = async () => {
+          const raw = await fetchAll(client, '/customers', {
+            expand: 'contacts,contacts.phones,contacts.emails,locations',
+          });
+          return raw.map(c => ({
+            ...flattenCustomer(c),
+            contacts: c.contacts,
+            locations: c.locations,
+          }));
+        };
+        const search = createCacheAwareSearch(db, 'customers', apiFetcher);
+        const items = await search(filters, { noCache: globalOpts.cache === false });
+        db.close();
+
         output(items, {
-          format: globalOpts.output,
+          format: globalOpts.output, sort: globalOpts.sort,
           columns: CUSTOMER_COLUMNS,
           headers: CUSTOMER_HEADERS,
         });
@@ -144,7 +159,7 @@ export function registerCustomerCommands(program) {
 
         const result = await api.create(data);
         console.log(chalk.green(`Customer created (ID: ${result.id ?? result.data?.id ?? 'unknown'}).`));
-        outputDetail(result.data ?? result, { format: globalOpts.output, headers: CUSTOMER_HEADERS });
+        outputDetail(result.data ?? result, { format: globalOpts.output, sort: globalOpts.sort, headers: CUSTOMER_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -186,7 +201,7 @@ export function registerCustomerCommands(program) {
 
         const result = await api.update(id, data);
         console.log(chalk.green(`Customer ${id} updated.`));
-        outputDetail(result.data ?? result, { format: globalOpts.output, headers: CUSTOMER_HEADERS });
+        outputDetail(result.data ?? result, { format: globalOpts.output, sort: globalOpts.sort, headers: CUSTOMER_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

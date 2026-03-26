@@ -11,7 +11,7 @@ export function createClient(profileName, { baseUrl, verbose = false } = {}) {
 
   const client = axios.create({
     baseURL: baseUrl || 'https://api.servicefusion.com/v1',
-    timeout: 30000,
+    timeout: 120000,
     headers: { 'Content-Type': 'application/json' },
   });
 
