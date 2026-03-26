@@ -4,8 +4,6 @@ import { createClient } from '../api/client.js';
 import { createEstimatesApi } from '../api/estimates.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
-import { createCache } from '../utils/cache.js';
-import { createCacheAwareSearch } from '../utils/cache-search.js';
 
 const ESTIMATE_COLUMNS = ['number', 'customer_name', 'status', 'description', 'total'];
 const ESTIMATE_HEADERS = {
@@ -35,16 +33,9 @@ export function registerEstimateCommands(program) {
       const globalOpts = program.opts();
       try {
         const { api } = initApi(globalOpts);
-        const filters = {};
-        if (options.customer) filters.customer_id = options.customer;
-
-        const db = createCache();
-        const apiFetcher = async () => api.list({}, { all: true });
-        const search = createCacheAwareSearch(db, 'estimates', apiFetcher);
-        let items = await search(filters, { noCache: globalOpts.cache === false });
-        db.close();
-
-        if (options.limit) items = items.slice(0, options.limit);
+        const params = {};
+        if (options.customer) params.customer_id = options.customer;
+        const items = await api.list(params, { all: options.all, limit: options.limit });
         output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));

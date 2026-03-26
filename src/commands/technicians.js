@@ -3,8 +3,6 @@ import { createClient } from '../api/client.js';
 import { createTechniciansApi } from '../api/technicians.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
-import { createCache } from '../utils/cache.js';
-import { createCacheAwareSearch } from '../utils/cache-search.js';
 
 const TECH_COLUMNS = ['id', 'first_name', 'last_name', 'email', 'phone_1', 'department'];
 const TECH_HEADERS = {
@@ -33,13 +31,7 @@ export function registerTechnicianCommands(program) {
       const globalOpts = program.opts();
       try {
         const { api } = initApi(globalOpts);
-        const db = createCache();
-        const apiFetcher = async () => api.list({}, { all: true });
-        const search = createCacheAwareSearch(db, 'techs', apiFetcher);
-        let items = await search({}, { noCache: globalOpts.cache === false });
-        db.close();
-
-        if (options.limit) items = items.slice(0, options.limit);
+        const items = await api.list({}, { all: options.all, limit: options.limit });
         output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: TECH_COLUMNS, headers: TECH_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));

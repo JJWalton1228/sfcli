@@ -36,23 +36,7 @@ export function registerCustomerCommands(program) {
       const globalOpts = program.opts();
       try {
         const { client, api } = initApi(globalOpts);
-        const db = createCache();
-        const apiFetcher = async () => {
-          const raw = await fetchAll(client, '/customers', {
-            expand: 'contacts,contacts.phones,contacts.emails,locations',
-          });
-          const { flattenCustomer } = await import('../api/customers.js');
-          return raw.map(c => ({
-            ...flattenCustomer(c),
-            contacts: c.contacts,
-            locations: c.locations,
-          }));
-        };
-        const search = createCacheAwareSearch(db, 'customers', apiFetcher);
-        let items = await search({}, { noCache: globalOpts.cache === false });
-        db.close();
-
-        if (options.limit) items = items.slice(0, options.limit);
+        const items = await api.list({}, { all: options.all, limit: options.limit });
         output(items, {
           format: globalOpts.output, sort: globalOpts.sort,
           columns: CUSTOMER_COLUMNS,
