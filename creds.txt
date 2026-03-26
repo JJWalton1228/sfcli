@@ -1,0 +1,9 @@
+# Client-ID
+hMkT3dmPQT4h17AEuL
+
+# Client Secret
+Ot-HDbC5fOXcPnE6u5yhpmM5kB8jo3oi
+
+
+node bin/sfcli.js auth login --client-id hMkT3dmPQT4h17AEuL --client-secret HDbC5fOXcPnE6u5yhpmM5kB8jo3oi
+node bin/sfcli.js customers list --limit 5
