@@ -52,17 +52,22 @@ export function registerJobCommands(program) {
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
-        const params = {};
-        if (options.status) params.status = options.status;
-        if (options.customer) params.customer_id = options.customer;
-        if (options.technician) params.technician_id = options.technician;
-        if (options.scheduledAfter) params.scheduled_after = options.scheduledAfter;
-        if (options.scheduledBefore) params.scheduled_before = options.scheduledBefore;
-        if (options.completedAfter) params.completed_after = options.completedAfter;
-        if (options.completedBefore) params.completed_before = options.completedBefore;
+        const { client, api } = initApi(globalOpts);
+        const filters = {};
+        if (options.status) filters.status = options.status;
+        if (options.customer) filters.customer_id = options.customer;
 
-        const items = await api.list(params, { all: options.all, limit: options.limit });
+        const db = createCache();
+        const apiFetcher = async () => {
+          const params = {};
+          if (options.status) params.status = options.status;
+          return api.list(params, { all: true });
+        };
+        const search = createCacheAwareSearch(db, 'jobs', apiFetcher);
+        let items = await search(filters, { noCache: globalOpts.cache === false });
+        db.close();
+
+        if (options.limit) items = items.slice(0, options.limit);
         output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
