@@ -63,7 +63,7 @@ export function registerJobCommands(program) {
           if (options.status) params.status = options.status;
           return api.list(params, { all: true });
         };
-        const search = createCacheAwareSearch(db, 'jobs', apiFetcher);
+        const search = createCacheAwareSearch(db, 'jobs', apiFetcher, { staleWhileRevalidate: true });
         let items = await search(filters, { noCache: globalOpts.cache === false });
         db.close();
 
