@@ -26,7 +26,7 @@ export function createJobsApi(client) {
       const needsClientFilter = Object.keys(clientFilters).length > 0;
 
       if (options.all || needsClientFilter) {
-        items = await fetchAll(client, '/jobs', queryParams);
+        items = await fetchAll(client, '/jobs', queryParams, { concurrency: 5 });
       } else if (options.limit) {
         items = await fetchAll(client, '/jobs', queryParams, {
           maxPages: Math.ceil(options.limit / SF_PAGE_SIZE),
@@ -61,7 +61,7 @@ export function createJobsApi(client) {
       // Use server-side status filter if provided
       if (rest.status) queryParams['filters[status]'] = rest.status;
 
-      const all = await fetchAll(client, '/jobs', queryParams);
+      const all = await fetchAll(client, '/jobs', queryParams, { concurrency: 5 });
       let results = all;
 
       // Client-side text search
