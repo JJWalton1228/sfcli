@@ -5,6 +5,7 @@
     "id_field": { "sf": "id", "fm": "SF_CustomerID" },
     "sync_key": "sf_id",
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
     "field_map": {
       "customer_name": "CompanyName",
       "contact_first_name": "FirstName",
@@ -29,6 +30,7 @@
     "fm_layout": "API_Jobs",
     "id_field": { "sf": "id", "fm": "SF_JobID" },
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
     "field_map": {
       "id": "SF_JobID",
       "customer_id": "SF_CustomerID",
@@ -45,6 +47,7 @@
     "fm_layout": "API_Estimates",
     "id_field": { "sf": "id", "fm": "SF_EstimateID" },
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
     "field_map": {
       "id": "SF_EstimateID",
       "customer_id": "SF_CustomerID",
@@ -58,6 +61,9 @@
     "fm_layout": "API_Technicians",
     "id_field": { "sf": "id", "fm": "SF_TechID" },
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
+    "fm_active_field": "Status",
+    "fm_active_value": "Active",
     "field_map": {
       "id": "SF_TechID",
       "first_name": "FirstName",
@@ -67,10 +73,11 @@
     }
   },
   "equipment": {
-    "sf_endpoint": "/equipment",
+    "sf_endpoint": "/customers/{customer_id}/equipment",
     "fm_layout": "API_Equipment",
     "id_field": { "sf": "id", "fm": "SF_EquipmentID" },
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
     "field_map": {
       "id": "SF_EquipmentID",
       "customer_id": "SF_CustomerID",
@@ -85,6 +92,7 @@
     "fm_layout": "API_Invoices",
     "id_field": { "sf": "id", "fm": "SF_InvoiceID" },
     "last_sync_field": "SF_LastSync",
+    "fm_last_modified_field": "ModifiedTS",
     "field_map": {
       "id": "SF_InvoiceID",
       "job_id": "SF_JobID",
