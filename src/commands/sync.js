@@ -11,10 +11,23 @@ import { pull, push, syncBidirectional, getSyncStatus, getSyncLog } from '../fil
 import { listConflicts, resolveConflict } from '../filemaker/conflict-resolver.js';
 import { output } from '../utils/output.js';
 import { sendSlackNotification, formatSyncSuccess, formatSyncFailure } from '../utils/slack.js';
-import { enableSchedule, disableSchedule, getScheduleStatus } from '../utils/cron-scheduler.js';
+import { enableSchedule, disableSchedule, getScheduleStatus, computeNextRun, isPacificTimezone } from '../utils/cron-scheduler.js';
 import { createCache } from '../utils/cache.js';
+import { refreshEntity as refreshCacheEntity } from '../cache/refreshers.js';
 
-const ENTITY_TYPES = ['customers', 'jobs', 'estimates', 'technicians', 'equipment', 'invoices'];
+// Map sync entity names → cache entity names (sync uses 'technicians', cache uses 'techs')
+const SYNC_TO_CACHE_ENTITY = {
+  customers: 'customers',
+  jobs: 'jobs',
+  estimates: 'estimates',
+  invoices: 'invoices',
+  technicians: 'techs',
+  equipment: 'equipment',
+};
+
+// Push order per PRD: customers → techs → equipment → jobs → estimates → invoices.
+// Customers must run first (dependent entities reference customer IDs).
+const ENTITY_TYPES = ['customers', 'technicians', 'equipment', 'jobs', 'estimates', 'invoices'];
 
 export function registerSyncCommands(program) {
   const sync = program.command('sync').description('FileMaker sync bridge');
@@ -73,6 +86,8 @@ export function registerSyncCommands(program) {
     .description('Push: FileMaker → Service Fusion')
     .option('--notify', 'Send Slack notification on completion/failure')
     .option('--since <date>', 'Only records modified since date')
+    .option('--since-last-sync', 'Only records modified since the last successful push (from sync-status.json)')
+    .option('--five-year-window', 'Limit to records from the last 5 years by FM last_modified')
     .action(async (entity, options) => {
       const globalOpts = program.opts();
       let fmClient;
@@ -87,11 +102,20 @@ export function registerSyncCommands(program) {
         fmClient = await createFmClient();
         const mapping = loadMapping();
 
+        // Resolve sinceDate once per command (used only when --since-last-sync, not per entity)
+        const syncStatus = options.sinceLastSync ? getSyncStatus() : null;
+
         for (const ent of entities) {
           try {
             const entityMapping = getEntityMapping(mapping, ent);
+            // Priority: explicit --since > --since-last-sync > undefined
+            let sinceDate = options.since;
+            if (!sinceDate && options.sinceLastSync) {
+              sinceDate = syncStatus?.[ent]?.last_push || null;
+            }
             const stats = await push(sfClient, fmClient, ent, entityMapping, {
-              since: options.since,
+              sinceDate,
+              fiveYearWindow: options.fiveYearWindow === true,
               dryRun: globalOpts.dryRun,
             });
             allStats[ent] = stats;
@@ -106,15 +130,23 @@ export function registerSyncCommands(program) {
           }
         }
 
-        // Post-sync: refresh cache
+        // Post-sync: refresh cache for each successfully pushed entity
         if (!globalOpts.dryRun) {
+          const db = createCache();
           try {
-            const db = createCache();
-            console.log(chalk.dim('Refreshing cache after sync...'));
-            // Cache refresh handled by the cache command internals
+            for (const ent of entities) {
+              if (allStats[ent]?.errors && !allStats[ent].created && !allStats[ent].updated) continue;
+              const cacheEntity = SYNC_TO_CACHE_ENTITY[ent];
+              if (!cacheEntity) continue;
+              try {
+                const count = await refreshCacheEntity(sfClient, db, cacheEntity);
+                console.log(chalk.dim(`Cache refreshed: ${cacheEntity} (${count} records)`));
+              } catch (cacheErr) {
+                console.error(chalk.yellow(`Cache refresh failed for ${cacheEntity}: ${cacheErr.message}`));
+              }
+            }
+          } finally {
             db.close();
-          } catch (cacheErr) {
-            console.error(chalk.yellow(`Cache refresh failed: ${cacheErr.message}`));
           }
         }
 
@@ -319,6 +351,15 @@ export function registerSyncCommands(program) {
         for (const entry of entries) {
           console.log(chalk.dim(`  ${entry}`));
         }
+        const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (!isPacificTimezone(systemTz)) {
+          console.log(chalk.yellow(
+            `\n  Warning: system timezone is ${systemTz}. Cron entries use TZ=America/Los_Angeles ` +
+            `so they will still fire at 6am/6pm Pacific, but any local-time logic in scripts may differ.`,
+          ));
+        }
+        const next = computeNextRun();
+        console.log(chalk.dim(`  Next run: ${next.iso} (${next.hourPacific === 6 ? '6:00 AM' : '6:00 PM'} Pacific)`));
       } catch (err) {
         console.error(chalk.red(`Failed to enable schedule: ${err.message}`));
         process.exitCode = 1;
@@ -353,6 +394,8 @@ export function registerSyncCommands(program) {
           for (const entry of status.entries) {
             console.log(chalk.dim(`  ${entry}`));
           }
+          const next = computeNextRun();
+          console.log(chalk.cyan(`  Next run: ${next.iso} (${next.hourPacific === 6 ? '6:00 AM' : '6:00 PM'} Pacific)`));
         } else {
           console.log(chalk.yellow('Sync schedule: DISABLED'));
           console.log(chalk.dim('  Run `sfcli sync schedule enable` to activate.'));

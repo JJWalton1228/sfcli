@@ -1,17 +1,11 @@
 import chalk from 'chalk';
 import { createCache } from '../utils/cache.js';
 import { createClient } from '../api/client.js';
-import { createCustomersApi, flattenCustomer } from '../api/customers.js';
-import { createJobsApi } from '../api/jobs.js';
-import { createEstimatesApi } from '../api/estimates.js';
-import { createInvoicesApi } from '../api/invoices.js';
-import { createTechniciansApi } from '../api/technicians.js';
-import { createEquipmentApi } from '../api/equipment.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
-import { fetchAll } from '../utils/paginator.js';
 import { createSpinner } from '../utils/spinner.js';
+import { refreshEntity as refreshCacheEntity, ENTITY_NAMES } from '../cache/refreshers.js';
 
-const ENTITIES = ['customers', 'jobs', 'estimates', 'invoices', 'techs', 'equipment'];
+const ENTITIES = ENTITY_NAMES;
 
 export function registerCacheCommands(program) {
   const cache = program.command('cache').description('Manage local data cache');
@@ -92,69 +86,22 @@ export function registerCacheCommands(program) {
 
 /**
  * Refresh a single entity's cache from the SF API.
+ * Thin wrapper that adds spinner + error reporting around the shared helper.
  */
 async function refreshEntity(client, db, entity) {
   const spinner = createSpinner(`Refreshing ${entity}...`);
   spinner.start();
 
   try {
-    let items;
-
-    if (entity === 'customers') {
-      items = await fetchAll(client, '/customers', {
-        expand: 'contacts,contacts.phones,contacts.emails,locations',
-      }, { maxPages: 10000 });
-      // Store raw (with nested data) and also flatten for search
-      const flattened = items.map(c => ({
-        ...flattenCustomer(c),
-        contacts: c.contacts,
-        locations: c.locations,
-      }));
-      db.putMany('customers', flattened);
-    } else if (entity === 'jobs') {
-      items = await fetchAll(client, '/jobs', {}, { maxPages: 10000 });
-      db.putMany('jobs', items);
-    } else if (entity === 'estimates') {
-      items = await fetchAll(client, '/estimates', {}, { maxPages: 10000 });
-      db.putMany('estimates', items);
-    } else if (entity === 'invoices') {
-      items = await fetchAll(client, '/invoices', {}, { maxPages: 10000 });
-      db.putMany('invoices', items);
-    } else if (entity === 'techs') {
-      items = await fetchAll(client, '/techs', {}, { maxPages: 10000 });
-      db.putMany('techs', items);
-    } else if (entity === 'equipment') {
-      // Equipment is nested under customers — iterate all cached customers
-      const customerStatus = db.status('customers');
-      if (customerStatus.count === 0) {
-        spinner.stop();
-        console.log(chalk.yellow(`  ${entity}: skipped (refresh customers first)`));
-        return;
-      }
-      // Get all customer IDs from cache
-      const allCustomers = db.search('customers', {});
-      const allEquipment = [];
-      let processed = 0;
-      for (const cust of allCustomers) {
-        processed++;
-        if (processed % 100 === 0) {
-          spinner.text = `Refreshing equipment... (${processed}/${allCustomers.length} customers, ${allEquipment.length} items)`;
-        }
-        try {
-          const equipItems = await fetchAll(client, `/customers/${cust.id}/equipment`, {}, { maxPages: 100, showProgress: false });
-          allEquipment.push(...equipItems);
-        } catch {
-          // Some customers may have no equipment endpoint — skip silently
-        }
-      }
-      items = allEquipment;
-      if (items.length > 0) {
-        db.putMany('equipment', items);
-      }
-    }
-
+    const count = await refreshCacheEntity(client, db, entity, {
+      onProgress: (text) => { spinner.text = text; },
+    });
     spinner.stop();
-    console.log(chalk.green(`  ${entity}: ${items.length} records cached`));
+    if (entity === 'equipment' && count === 0 && db.status('customers').count === 0) {
+      console.log(chalk.yellow(`  ${entity}: skipped (refresh customers first)`));
+    } else {
+      console.log(chalk.green(`  ${entity}: ${count} records cached`));
+    }
   } catch (err) {
     spinner.stop();
     console.error(chalk.red(`  ${entity}: failed — ${err.message}`));

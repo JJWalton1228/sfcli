@@ -3,6 +3,8 @@ import { createClient } from '../api/client.js';
 import { createEquipmentApi } from '../api/equipment.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
+import { createCache } from '../utils/cache.js';
+import { createCacheAwareSearch } from '../utils/cache-search.js';
 
 const EQUIP_COLUMNS = ['id', 'type', 'make', 'model', 'serial_number', 'location'];
 const EQUIP_HEADERS = {
@@ -33,7 +35,14 @@ export function registerEquipmentCommands(program) {
       const globalOpts = program.opts();
       try {
         const { api } = initApi(globalOpts);
-        const items = await api.listForCustomer(options.customer, {}, { all: options.all, limit: options.limit });
+        const db = createCache();
+        const apiFetcher = async () =>
+          api.listForCustomer(options.customer, {}, { all: true });
+        const search = createCacheAwareSearch(db, 'equipment', apiFetcher, { staleWhileRevalidate: true });
+        let items = await search({ customer_id: Number(options.customer) }, { noCache: globalOpts.cache === false });
+        db.close();
+
+        if (options.limit) items = items.slice(0, options.limit);
         output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: EQUIP_COLUMNS, headers: EQUIP_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));
@@ -65,7 +74,15 @@ export function registerEquipmentCommands(program) {
       const globalOpts = program.opts();
       try {
         const { api } = initApi(globalOpts);
-        const items = await api.search(options.customer, { q: query });
+        const db = createCache();
+        const apiFetcher = async () =>
+          api.listForCustomer(options.customer, {}, { all: true });
+        const search = createCacheAwareSearch(db, 'equipment', apiFetcher, { staleWhileRevalidate: true });
+        const items = await search(
+          { customer_id: Number(options.customer), q: query },
+          { noCache: globalOpts.cache === false },
+        );
+        db.close();
         output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: EQUIP_COLUMNS, headers: EQUIP_HEADERS });
       } catch (err) {
         console.error(chalk.red(err.message));

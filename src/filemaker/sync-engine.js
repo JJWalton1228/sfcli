@@ -1,6 +1,7 @@
 import { getLogger } from '../utils/logger.js';
 import { createSpinner } from '../utils/spinner.js';
 import { sfToFm, fmToSf, getSfIdFromFm, getFmRecordId, getEntityMapping } from './mapper.js';
+import { buildFmPushQuery } from './query-builder.js';
 import { addConflict, autoResolveStrategy } from './conflict-resolver.js';
 import { fetchAll } from '../utils/paginator.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -140,14 +141,17 @@ export async function pull(sfClient, fmClient, entityType, entityMapping, option
  */
 export async function push(sfClient, fmClient, entityType, entityMapping, options = {}) {
   const logger = getLogger();
-  const { dryRun = false } = options;
+  const { dryRun = false, sinceDate, fiveYearWindow = false } = options;
   const spinner = createSpinner(`Pushing ${entityType}...`);
   spinner.start();
 
   const stats = { created: 0, updated: 0, errors: 0, skipped: 0 };
 
   try {
-    const fmRecords = await fmClient.getAllRecords(entityMapping.fm_layout);
+    const query = buildFmPushQuery({ entityType, mapping: entityMapping, sinceDate, fiveYearWindow });
+    const fmRecords = query
+      ? await fmClient.find(entityMapping.fm_layout, query)
+      : await fmClient.getAllRecords(entityMapping.fm_layout);
     spinner.text = `Pushing ${entityType}: ${fmRecords.length} FM records to process`;
 
     for (const fmRecord of fmRecords) {
@@ -157,13 +161,21 @@ export async function push(sfClient, fmClient, entityType, entityMapping, option
       // Remove the ID field from the data to push (SF assigns IDs)
       delete sfData[entityMapping.id_field.sf];
 
+      // Resolve any {placeholder} fragments in the SF endpoint using record data.
+      // Placeholders consume their field (removed from body) so a nested endpoint
+      // like /customers/{customer_id}/equipment uses customer_id for the path only.
+      const { path: resolvedEndpoint, body: resolvedBody } = resolveEndpoint(
+        entityMapping.sf_endpoint,
+        sfData,
+      );
+
       try {
         if (!sfId) {
           // No SF ID — create in SF
           if (dryRun) {
             logger.debug(`[dry-run] Would create ${entityType} in SF from FM#${getFmRecordId(fmRecord)}`);
           } else {
-            const response = await sfClient.post(entityMapping.sf_endpoint, sfData);
+            const response = await sfClient.post(resolvedEndpoint, resolvedBody);
             const newId = response.data?.id || response.data?.data?.id;
             if (newId) {
               // Write SF ID back to FM
@@ -179,7 +191,7 @@ export async function push(sfClient, fmClient, entityType, entityMapping, option
           if (dryRun) {
             logger.debug(`[dry-run] Would update ${entityType} SF#${sfId} from FM`);
           } else {
-            await sfClient.put(`${entityMapping.sf_endpoint}/${sfId}`, sfData);
+            await sfClient.put(`${resolvedEndpoint}/${sfId}`, resolvedBody);
             if (entityMapping.last_sync_field) {
               await fmClient.updateRecord(entityMapping.fm_layout, getFmRecordId(fmRecord), {
                 [entityMapping.last_sync_field]: new Date().toISOString(),
@@ -209,6 +221,24 @@ export async function syncBidirectional(sfClient, fmClient, entityType, entityMa
   const pullStats = await pull(sfClient, fmClient, entityType, entityMapping, options);
   const pushStats = await push(sfClient, fmClient, entityType, entityMapping, options);
   return { pull: pullStats, push: pushStats };
+}
+
+/**
+ * Replace {field} placeholders in an endpoint template with values from `data`.
+ * Consumed fields are removed from the returned body copy so they don't appear
+ * in the request payload (e.g. /customers/{customer_id}/equipment).
+ */
+function resolveEndpoint(endpoint, data) {
+  const body = { ...data };
+  const path = endpoint.replace(/\{(\w+)\}/g, (_, field) => {
+    const value = body[field];
+    if (value === undefined || value === null || value === '') {
+      throw new Error(`Missing value for endpoint placeholder {${field}}`);
+    }
+    delete body[field];
+    return String(value);
+  });
+  return { path, body };
 }
 
 function updateSyncTimestamp(entityType, direction) {

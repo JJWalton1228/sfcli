@@ -9,11 +9,87 @@ export const SFCLI_CRON_MARKER = 'SFCLI_SYNC';
  * @returns {string[]} Two cron entry strings
  */
 export function buildCronEntries(sfcliCommand) {
-  const syncCmd = `${sfcliCommand} sync push all --notify`;
+  const syncCmd = `${sfcliCommand} sync push all --since-last-sync --notify`;
   return [
     `0 6 * * * TZ=America/Los_Angeles ${syncCmd} # ${SFCLI_CRON_MARKER}`,
     `0 18 * * * TZ=America/Los_Angeles ${syncCmd} # ${SFCLI_CRON_MARKER}`,
   ];
+}
+
+/**
+ * Compute the next scheduled run (6am or 6pm Pacific) from a reference Date.
+ * Handles PST (UTC-8) and PDT (UTC-7) via Intl.DateTimeFormat.
+ *
+ * @param {Date} now - reference instant
+ * @returns {{ iso: string, hourPacific: 6|18 }}
+ */
+export function computeNextRun(now = new Date()) {
+  // Determine the current hour in Pacific time using Intl — handles DST automatically.
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type) => Number(parts.find(p => p.type === type).value);
+  const pacHour = get('hour') % 24;
+  const pacMinute = get('minute');
+  const pacSecond = get('second');
+  const pacYear = get('year');
+  const pacMonth = get('month');
+  const pacDay = get('day');
+
+  // Pick next slot: 6am, 6pm, or tomorrow 6am.
+  let targetHour, targetYear = pacYear, targetMonth = pacMonth, targetDay = pacDay;
+  const beforeSix = pacHour < 6 || (pacHour === 6 && pacMinute === 0 && pacSecond === 0);
+  const beforeEighteen = pacHour < 18 || (pacHour === 18 && pacMinute === 0 && pacSecond === 0);
+  if (beforeSix) {
+    targetHour = 6;
+  } else if (beforeEighteen) {
+    targetHour = 18;
+  } else {
+    targetHour = 6;
+    // Roll to next calendar day in Pacific.
+    const tomorrow = new Date(Date.UTC(pacYear, pacMonth - 1, pacDay));
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    targetYear = tomorrow.getUTCFullYear();
+    targetMonth = tomorrow.getUTCMonth() + 1;
+    targetDay = tomorrow.getUTCDate();
+  }
+
+  // Convert (pacYear/pacMonth/pacDay targetHour:00 Pacific) → UTC.
+  // Strategy: binary-search the offset by probing Intl. Simpler: compute offset from current instant.
+  // The offset (UTC - Pacific) at `now` is stable enough for the next 12h window.
+  const offsetMinutes = computePacificOffsetMinutes(now);
+  const iso = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay, targetHour, 0, 0) + offsetMinutes * 60_000).toISOString();
+
+  return { iso, hourPacific: targetHour };
+}
+
+/**
+ * Return the current Pacific UTC offset in minutes (positive = Pacific is behind UTC).
+ * e.g. PDT = 420 (UTC-7), PST = 480 (UTC-8).
+ */
+function computePacificOffsetMinutes(now) {
+  const utcParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC', hour: '2-digit', hour12: false,
+  }).formatToParts(now);
+  const pacParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', hour: '2-digit', hour12: false,
+  }).formatToParts(now);
+  const utcHour = Number(utcParts.find(p => p.type === 'hour').value) % 24;
+  const pacHour = Number(pacParts.find(p => p.type === 'hour').value) % 24;
+  let diff = utcHour - pacHour;
+  if (diff < 0) diff += 24;
+  return diff * 60;
+}
+
+/**
+ * Check whether a timezone string is considered Pacific-compatible.
+ */
+export function isPacificTimezone(tz) {
+  if (!tz) return false;
+  return ['America/Los_Angeles', 'US/Pacific', 'PST8PDT'].includes(tz);
 }
 
 /**
