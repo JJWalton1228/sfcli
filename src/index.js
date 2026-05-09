@@ -13,6 +13,10 @@ import { registerSyncCommands } from './commands/sync.js';
 import { registerDiscoverCommands } from './commands/discover.js';
 import { registerCacheCommands } from './commands/cache.js';
 import { registerConfigCommands } from './commands/config-cmd.js';
+import { registerAskCommand } from './commands/ask.js';
+import { registerLocationCommands } from './commands/locations.js';
+import { registerContactCommands } from './commands/contacts.js';
+import { registerQueryCommands } from './commands/query.js';
 import { generateBashCompletionScript, generateZshCompletionScript } from './utils/completions.js';
 import { enableVerbose } from './utils/logger.js';
 
@@ -55,6 +59,10 @@ export function createProgram() {
   registerDiscoverCommands(program);
   registerCacheCommands(program);
   registerConfigCommands(program);
+  registerAskCommand(program);
+  registerLocationCommands(program);
+  registerContactCommands(program);
+  registerQueryCommands(program);
 
   // --- completion ---
   program

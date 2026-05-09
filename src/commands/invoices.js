@@ -27,26 +27,33 @@ export function registerInvoiceCommands(program) {
     .description('List invoices')
     .option('--all', 'Fetch all pages')
     .option('--limit <n>', 'Limit results', parseInt)
-    .option('--status <status>', 'Filter by status')
-    .option('--customer <id>', 'Filter by customer ID')
-    .option('--overdue', 'Show only overdue invoices')
-    .option('--created-after <date>', 'Created after date')
+    .option('--paid', 'Show only paid invoices')
+    .option('--unpaid', 'Show only unpaid invoices')
+    .option('--customer <name>', 'Filter by customer name')
+    .option('--date-range <range>', 'Filter by date range (YYYY-MM-DD..YYYY-MM-DD)')
+    .option('--min-total <n>', 'Minimum total', parseFloat)
+    .option('--max-total <n>', 'Maximum total', parseFloat)
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
         const filters = {};
-        if (options.status) filters.status = options.status;
-        if (options.customer) filters.customer_id = options.customer;
+        if (options.paid) filters.paid = true;
+        if (options.unpaid) filters.paid = false;
+        if (options.customer) filters.customerName = options.customer;
+        if (options.dateRange) {
+          const [from, to] = options.dateRange.split('..');
+          if (from) filters.dateFrom = from;
+          if (to) filters.dateTo = to;
+        }
+        if (options.minTotal !== undefined) filters.minTotal = options.minTotal;
+        if (options.maxTotal !== undefined) filters.maxTotal = options.maxTotal;
 
-        const db = createCache();
-        const apiFetcher = async () => api.list({}, { all: true });
-        const search = createCacheAwareSearch(db, 'invoices', apiFetcher);
-        let items = await search(filters, { noCache: globalOpts.cache === false });
-        db.close();
+        const ec = (await import('../cache/index.js')).getEntityCache(globalOpts);
+        let items = await ec.findCached('invoices', filters, { noCache: globalOpts.cache === false });
 
         if (options.limit) items = items.slice(0, options.limit);
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: INVOICE_COLUMNS, headers: INVOICE_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: INVOICE_COLUMNS, headers: INVOICE_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

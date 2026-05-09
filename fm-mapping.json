@@ -3,11 +3,13 @@
     "sf_endpoint": "/customers",
     "fm_layout": "API_Customers",
     "id_field": { "sf": "id", "fm": "SF_CustomerID" },
+    "production_key_field": "org_name",
+    "fm_created_field": "DateCreated",
     "sync_key": "sf_id",
     "last_sync_field": "SF_LastSync",
     "fm_last_modified_field": "ModifiedTS",
     "field_map": {
-      "customer_name": "CompanyName",
+      "org_name": "org_name",
       "contact_first_name": "FirstName",
       "contact_last_name": "LastName",
       "street_1": "Address1",
@@ -57,7 +59,7 @@
     }
   },
   "technicians": {
-    "sf_endpoint": "/technicians",
+    "sf_endpoint": "/techs",
     "fm_layout": "API_Technicians",
     "id_field": { "sf": "id", "fm": "SF_TechID" },
     "last_sync_field": "SF_LastSync",

@@ -28,6 +28,16 @@ describe('buildFmPushQuery', () => {
     expect(q).toEqual([{ ModifiedTS: '>=2026-03-01T00:00:00.000Z' }]);
   });
 
+  it('combines created-date gate and modified-date delta when both are provided', () => {
+    const q = buildFmPushQuery({
+      entityType: 'customers',
+      mapping: { fm_created_field: 'DateCreated', fm_last_modified_field: 'ModifiedTS' },
+      createdSince: '2024-10-01',
+      sinceDate: '2026-05-01',
+    });
+    expect(q).toEqual([{ DateCreated: '>=2024-10-01', ModifiedTS: '>=2026-05-01' }]);
+  });
+
   it('applies a 5-year rolling window for customers when requested', () => {
     const q = buildFmPushQuery({
       entityType: 'customers',

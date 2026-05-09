@@ -9,7 +9,7 @@ export const SFCLI_CRON_MARKER = 'SFCLI_SYNC';
  * @returns {string[]} Two cron entry strings
  */
 export function buildCronEntries(sfcliCommand) {
-  const syncCmd = `${sfcliCommand} sync push all --since-last-sync --notify`;
+  const syncCmd = `${sfcliCommand} sync push all --created-since 2024-10-01 --since-last-sync --notify`;
   return [
     `0 6 * * * TZ=America/Los_Angeles ${syncCmd} # ${SFCLI_CRON_MARKER}`,
     `0 18 * * * TZ=America/Los_Angeles ${syncCmd} # ${SFCLI_CRON_MARKER}`,

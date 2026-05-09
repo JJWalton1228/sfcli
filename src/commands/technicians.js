@@ -27,20 +27,22 @@ export function registerTechnicianCommands(program) {
   techs
     .command('list')
     .description('List technicians')
-    .option('--all', 'Fetch all pages')
+    .option('--name <name>', 'Filter by name')
+    .option('--department <dept>', 'Filter by department')
     .option('--limit <n>', 'Limit results', parseInt)
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
-        const db = createCache();
-        const apiFetcher = async () => api.list({}, { all: true });
-        const search = createCacheAwareSearch(db, 'techs', apiFetcher);
-        let items = await search({}, { noCache: globalOpts.cache === false });
-        db.close();
+        const filters = {};
+        if (options.name) filters.name = options.name;
+        if (options.department) filters.department = options.department;
+
+        const ec = (await import('../cache/index.js')).getEntityCache(globalOpts);
+        let items = await ec.findCached('techs', filters, { noCache: globalOpts.cache === false });
 
         if (options.limit) items = items.slice(0, options.limit);
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: TECH_COLUMNS, headers: TECH_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: TECH_COLUMNS, headers: TECH_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

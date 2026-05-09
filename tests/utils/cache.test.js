@@ -62,9 +62,15 @@ describe('Cache — basic operations', () => {
 describe('Cache — search', () => {
   beforeEach(() => {
     cache.putMany('customers', [
-      { id: 1, customer_name: 'Kaiser Santa Clara', city: 'SANTA CLARA', state: 'Ca', phone: '4088510060', email: 'dave@kp.org' },
-      { id: 2, customer_name: 'Golden Gate Glass', city: 'SAN FRANCISCO', state: 'Ca', phone: '4155520220', email: 'brian@gg.com' },
-      { id: 3, customer_name: 'Kaiser Roseville', city: 'ROSEVILLE', state: 'Ca', phone: '9167845920', email: 'aaron@kp.org' },
+      { id: 1, customer_name: 'Kaiser Santa Clara',
+        contacts: [{ id: 10, fname: 'David', lname: 'Faraone', is_primary: true, phones: [{ phone: '4088510060' }], emails: [{ email: 'dave@kp.org' }] }],
+        locations: [{ id: 50, city: 'SANTA CLARA', state_prov: 'Ca', is_primary: true }] },
+      { id: 2, customer_name: 'Golden Gate Glass',
+        contacts: [{ id: 20, fname: 'Brian', is_primary: true, phones: [{ phone: '4155520220' }], emails: [{ email: 'brian@gg.com' }] }],
+        locations: [{ id: 60, city: 'SAN FRANCISCO', state_prov: 'Ca', is_primary: true }] },
+      { id: 3, customer_name: 'Kaiser Roseville',
+        contacts: [{ id: 30, fname: 'Aaron', is_primary: true, phones: [{ phone: '9167845920' }], emails: [{ email: 'aaron@kp.org' }] }],
+        locations: [{ id: 70, city: 'ROSEVILLE', state_prov: 'Ca', is_primary: true }] },
     ]);
   });
 
@@ -134,9 +140,21 @@ describe('Cache — clear', () => {
   it('should clear all entities when no entity specified', () => {
     cache.put('customers', 1, { id: 1, customer_name: 'Test' });
     cache.put('jobs', 1, { id: 1, status: 'Scheduled' });
+    cache.upsertSyncLink({
+      entityType: 'customer',
+      sourceKey: 'Acme Corp',
+      sfId: '123',
+      originalKey: 'Acme Corp',
+      matchEvidence: { type: 'test' },
+      status: 'linked',
+    });
     cache.clear();
     expect(cache.get('customers', 1)).toBeNull();
     expect(cache.get('jobs', 1)).toBeNull();
+    expect(cache.getSyncLink('customer', 'Acme Corp')).toMatchObject({
+      sf_id: '123',
+      source_key: 'Acme Corp',
+    });
   });
 });
 

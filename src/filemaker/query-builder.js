@@ -8,14 +8,20 @@
  * - technicians:
  *     - If `fm_active_field` is set, include `{ [field]: "==<fm_active_value||'Active'>" }`.
  *     - Five-year window is NOT applied (per PRD: active techs regardless of date).
+ * - If `createdSince` and `fm_created_field` are set, include
+ *   `{ [fm_created_field]: ">=<createdSince>" }`.
  * - other entities (customers, jobs, estimates, invoices, equipment):
  *     - If `sinceDate` is set, include `{ [last_modified_field]: ">=<sinceDate>" }`.
  *     - Else if `fiveYearWindow` is set, include `{ [last_modified_field]: ">=<5-years-ago>" }`.
  *     - `sinceDate` always overrides `fiveYearWindow`.
  * - If the entity has no `fm_last_modified_field` and no other filters apply, returns null.
  */
-export function buildFmPushQuery({ entityType, mapping, sinceDate, fiveYearWindow, now = new Date() }) {
+export function buildFmPushQuery({ entityType, mapping, sinceDate, createdSince, fiveYearWindow, now = new Date() }) {
   const clause = {};
+
+  if (createdSince && mapping.fm_created_field) {
+    clause[mapping.fm_created_field] = `>=${createdSince}`;
+  }
 
   if (entityType === 'technicians') {
     if (mapping.fm_active_field) {

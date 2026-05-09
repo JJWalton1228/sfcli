@@ -37,6 +37,13 @@ describe('Cron scheduler — build entries', () => {
       expect(entry).toContain('--since-last-sync');
     }
   });
+
+  it('should include the production created-date gate', () => {
+    const entries = buildCronEntries('/usr/local/bin/node /path/to/sfcli.js');
+    for (const entry of entries) {
+      expect(entry).toContain('--created-since 2024-10-01');
+    }
+  });
 });
 
 describe('computeNextRun', () => {

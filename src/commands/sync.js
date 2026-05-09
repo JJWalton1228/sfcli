@@ -50,7 +50,8 @@ export function registerSyncCommands(program) {
   // --- pull ---
   sync
     .command('pull <entity>')
-    .description('Pull: Service Fusion → FileMaker')
+    .description('Development-only pull: Service Fusion → FileMaker')
+    .hideHelp()
     .option('--since <date>', 'Only records updated since date')
     .option('--status <status>', 'Filter by status (jobs)')
     .action(async (entity, options) => {
@@ -85,12 +86,15 @@ export function registerSyncCommands(program) {
     .command('push <entity>')
     .description('Push: FileMaker → Service Fusion')
     .option('--notify', 'Send Slack notification on completion/failure')
+    .option('--created-since <date>', 'Only records created on or after date', '2024-10-01')
     .option('--since <date>', 'Only records modified since date')
     .option('--since-last-sync', 'Only records modified since the last successful push (from sync-status.json)')
     .option('--five-year-window', 'Limit to records from the last 5 years by FM last_modified')
+    .option('--audit-dir <dir>', 'Directory for dry-run audit detail files')
     .action(async (entity, options) => {
       const globalOpts = program.opts();
       let fmClient;
+      let db;
       const startTime = Date.now();
       const allStats = {};
       const config = getConfig();
@@ -100,6 +104,7 @@ export function registerSyncCommands(program) {
         const entities = entity === 'all' ? ENTITY_TYPES : [entity];
         const sfClient = initSfClient(globalOpts);
         fmClient = await createFmClient();
+        db = createCache();
         const mapping = loadMapping();
 
         // Resolve sinceDate once per command (used only when --since-last-sync, not per entity)
@@ -115,8 +120,12 @@ export function registerSyncCommands(program) {
             }
             const stats = await push(sfClient, fmClient, ent, entityMapping, {
               sinceDate,
+              createdSince: options.createdSince,
               fiveYearWindow: options.fiveYearWindow === true,
               dryRun: globalOpts.dryRun,
+              production: true,
+              syncDb: db,
+              auditDir: options.auditDir,
             });
             allStats[ent] = stats;
             printStats('Push', ent, stats, globalOpts.dryRun);
@@ -132,21 +141,16 @@ export function registerSyncCommands(program) {
 
         // Post-sync: refresh cache for each successfully pushed entity
         if (!globalOpts.dryRun) {
-          const db = createCache();
-          try {
-            for (const ent of entities) {
-              if (allStats[ent]?.errors && !allStats[ent].created && !allStats[ent].updated) continue;
-              const cacheEntity = SYNC_TO_CACHE_ENTITY[ent];
-              if (!cacheEntity) continue;
-              try {
-                const count = await refreshCacheEntity(sfClient, db, cacheEntity);
-                console.log(chalk.dim(`Cache refreshed: ${cacheEntity} (${count} records)`));
-              } catch (cacheErr) {
-                console.error(chalk.yellow(`Cache refresh failed for ${cacheEntity}: ${cacheErr.message}`));
-              }
+          for (const ent of entities) {
+            if (allStats[ent]?.errors && !allStats[ent].created && !allStats[ent].updated) continue;
+            const cacheEntity = SYNC_TO_CACHE_ENTITY[ent];
+            if (!cacheEntity) continue;
+            try {
+              const count = await refreshCacheEntity(sfClient, db, cacheEntity);
+              console.log(chalk.dim(`Cache refreshed: ${cacheEntity} (${count} records)`));
+            } catch (cacheErr) {
+              console.error(chalk.yellow(`Cache refresh failed for ${cacheEntity}: ${cacheErr.message}`));
             }
-          } finally {
-            db.close();
           }
         }
 
@@ -163,13 +167,15 @@ export function registerSyncCommands(program) {
         }
       } finally {
         if (fmClient) await fmClient.disconnect();
+        if (db) db.close();
       }
     });
 
   // --- run (bidirectional) ---
   sync
     .command('run <entity>')
-    .description('Bidirectional sync')
+    .description('Development-only bidirectional sync')
+    .hideHelp()
     .option('--since <date>', 'Only records updated since date')
     .action(async (entity, options) => {
       const globalOpts = program.opts();
@@ -207,7 +213,7 @@ export function registerSyncCommands(program) {
       const globalOpts = program.opts();
       const status = getSyncStatus();
       if (Object.keys(status).length === 0) {
-        console.log(chalk.yellow('No sync history. Run `sfcli sync pull` or `sfcli sync run` first.'));
+        console.log(chalk.yellow('No sync history. Run `sfcli sync push all --dry-run` first.'));
         return;
       }
       const rows = Object.entries(status).map(([entity, times]) => ({
@@ -468,6 +474,13 @@ function printStats(direction, entity, stats, dryRun) {
 
 function getDefaultMapping() {
   return {
-    customers: { sf_endpoint: "/customers", fm_layout: "API_Customers", id_field: { sf: "id", fm: "SF_CustomerID" }, last_sync_field: "SF_LastSync", field_map: { customer_name: "CompanyName", phone: "Phone", email: "Email" } },
+    customers: {
+      sf_endpoint: "/customers",
+      fm_layout: "API_Customers",
+      production_key_field: "org_name",
+      fm_created_field: "DateCreated",
+      id_field: { sf: "id", fm: "unused" },
+      field_map: { org_name: "org_name", phone: "Phone", email: "Email" },
+    },
   };
 }
