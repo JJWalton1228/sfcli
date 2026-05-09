@@ -12,7 +12,7 @@ import { parseSortFlag, sortRows } from './sort.js';
  * @param {Object} [options.headers] - Map of key -> display header name
  * @param {string} [options.idField] - Field to use for quiet mode (default: 'id')
  */
-export function output(rows, { format = 'table', columns, headers = {}, idField = 'id', sort } = {}) {
+export function output(rows, { format = 'table', columns, headers = {}, idField = 'id', sort, select } = {}) {
   if (!rows || rows.length === 0) {
     if (format === 'json') {
       console.log('[]');
@@ -28,6 +28,20 @@ export function output(rows, { format = 'table', columns, headers = {}, idField 
   if (sort) {
     const sortSpec = parseSortFlag(sort);
     rows = sortRows(rows, sortSpec);
+  }
+
+  // --select overrides the default column set
+  if (select) {
+    columns = select.split(',').map(s => s.trim());
+    // Filter rows to only include selected fields
+    rows = rows.map(row => {
+      const picked = {};
+      for (const col of columns) {
+        if (col in row) picked[col] = row[col];
+        else picked[col] = row[col] ?? '';
+      }
+      return picked;
+    });
   }
 
   // Auto-detect columns from first row if not provided

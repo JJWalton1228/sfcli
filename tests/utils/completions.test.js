@@ -41,7 +41,8 @@ describe('Tab completion — getCompletions', () => {
   it('should return subcommands for sync', () => {
     const results = getCompletions(['sync']);
     expect(results).toContain('push');
-    expect(results).toContain('pull');
+    expect(results).not.toContain('pull');
+    expect(results).not.toContain('run');
     expect(results).toContain('schedule');
     expect(results).toContain('status');
     expect(results).toContain('fm-test');

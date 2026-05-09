@@ -4,6 +4,8 @@ import { createClient } from '../api/client.js';
 import { createEstimatesApi } from '../api/estimates.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
+import { createCache } from '../utils/cache.js';
+import { createCacheAwareSearch } from '../utils/cache-search.js';
 
 const ESTIMATE_COLUMNS = ['number', 'customer_name', 'status', 'description', 'total'];
 const ESTIMATE_HEADERS = {
@@ -26,17 +28,28 @@ export function registerEstimateCommands(program) {
   estimates
     .command('list')
     .description('List estimates')
-    .option('--all', 'Fetch all pages')
+    .option('--status <status>', 'Filter by status')
+    .option('--customer <name>', 'Filter by customer name')
+    .option('--date-range <range>', 'Filter by date range (YYYY-MM-DD..YYYY-MM-DD)')
     .option('--limit <n>', 'Limit results', parseInt)
-    .option('--customer <id>', 'Filter by customer ID')
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
-        const params = {};
-        if (options.customer) params.customer_id = options.customer;
-        const items = await api.list(params, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
+        const filters = {};
+        if (options.status) filters.status = options.status;
+        if (options.customer) filters.customerName = options.customer;
+        if (options.dateRange) {
+          const [from, to] = options.dateRange.split('..');
+          if (from) filters.dateFrom = from;
+          if (to) filters.dateTo = to;
+        }
+
+        const ec = (await import('../cache/index.js')).getEntityCache(globalOpts);
+        let items = await ec.findCached('estimates', filters, { noCache: globalOpts.cache === false });
+
+        if (options.limit) items = items.slice(0, options.limit);
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;
@@ -66,7 +79,7 @@ export function registerEstimateCommands(program) {
       try {
         const { api } = initApi(globalOpts);
         const items = await api.search({ q: query });
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS });
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: ESTIMATE_COLUMNS, headers: ESTIMATE_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

@@ -2,12 +2,10 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { readFileSync } from 'fs';
 import { createClient } from '../api/client.js';
-import { createCustomersApi, flattenCustomer } from '../api/customers.js';
+import { createCustomersApi } from '../api/customers.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
-import { createCache } from '../utils/cache.js';
-import { createCacheAwareSearch } from '../utils/cache-search.js';
-import { fetchAll } from '../utils/paginator.js';
+import { getEntityCache } from '../cache/index.js';
 
 const CUSTOMER_COLUMNS = ['id', 'customer_name', 'phone', 'email', 'city', 'state'];
 const CUSTOMER_HEADERS = {
@@ -32,15 +30,22 @@ export function registerCustomerCommands(program) {
     .description('List customers')
     .option('--all', 'Fetch all pages')
     .option('--limit <n>', 'Limit results', parseInt)
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { client, api } = initApi(globalOpts);
-        const items = await api.list({}, { all: options.all, limit: options.limit });
+        let items = await getEntityCache(globalOpts).findCached(
+          'customers',
+          {},
+          { noCache: globalOpts.cache === false },
+        );
+
+        if (options.limit) items = items.slice(0, options.limit);
         output(items, {
           format: globalOpts.output, sort: globalOpts.sort,
           columns: CUSTOMER_COLUMNS,
           headers: CUSTOMER_HEADERS,
+          select: options.select,
         });
       } catch (err) {
         console.error(chalk.red(err.message));
@@ -73,42 +78,43 @@ export function registerCustomerCommands(program) {
     .description('Search customers')
     .option('--phone <phone>', 'Search by phone')
     .option('--email <email>', 'Search by email')
-    .option('--city <city>', 'Filter by city')
-    .option('--state <state>', 'Filter by state')
+    .option('--city <city>', 'Filter by city (any location)')
+    .option('--state <state>', 'Filter by state (any location)')
+    .option('--zip <zip>', 'Filter by zip (any location)')
+    .option('--street <text>', 'Filter by street address (substring)')
+    .option('--contact-name <name>', 'Filter by contact name')
+    .option('--has-jobs-since <date>', 'Customers with jobs after date')
+    .option('--no-jobs-since <date>', 'Customers with NO jobs after date')
     .option('--created-after <date>', 'Created after date')
     .option('--created-before <date>', 'Created before date')
     .option('--tag <tag>', 'Filter by tag')
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (query, options) => {
       const globalOpts = program.opts();
       try {
-        const { client, api } = initApi(globalOpts);
         const filters = {};
         if (query) filters.q = query;
         if (options.phone) filters.phone = options.phone;
         if (options.email) filters.email = options.email;
         if (options.city) filters.city = options.city;
         if (options.state) filters.state = options.state;
+        if (options.zip) filters.zip = options.zip;
+        if (options.street) filters.street = options.street;
+        if (options.contactName) filters.contactName = options.contactName;
+        if (options.hasJobsSince) filters.hasJobsSince = options.hasJobsSince;
+        if (options.noJobsSince) filters.noJobsSince = options.noJobsSince;
 
-        // Use cache-aware search
-        const db = createCache();
-        const apiFetcher = async () => {
-          const raw = await fetchAll(client, '/customers', {
-            expand: 'contacts,contacts.phones,contacts.emails,locations',
-          });
-          return raw.map(c => ({
-            ...flattenCustomer(c),
-            contacts: c.contacts,
-            locations: c.locations,
-          }));
-        };
-        const search = createCacheAwareSearch(db, 'customers', apiFetcher);
-        const items = await search(filters, { noCache: globalOpts.cache === false });
-        db.close();
+        const items = await getEntityCache(globalOpts).findCached(
+          'customers',
+          filters,
+          { noCache: globalOpts.cache === false },
+        );
 
         output(items, {
           format: globalOpts.output, sort: globalOpts.sort,
           columns: CUSTOMER_COLUMNS,
           headers: CUSTOMER_HEADERS,
+          select: options.select,
         });
       } catch (err) {
         console.error(chalk.red(err.message));

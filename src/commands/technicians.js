@@ -3,6 +3,8 @@ import { createClient } from '../api/client.js';
 import { createTechniciansApi } from '../api/technicians.js';
 import { getActiveProfileName, getProfileConfig } from '../config/index.js';
 import { output, outputDetail } from '../utils/output.js';
+import { createCache } from '../utils/cache.js';
+import { createCacheAwareSearch } from '../utils/cache-search.js';
 
 const TECH_COLUMNS = ['id', 'first_name', 'last_name', 'email', 'phone_1', 'department'];
 const TECH_HEADERS = {
@@ -25,14 +27,22 @@ export function registerTechnicianCommands(program) {
   techs
     .command('list')
     .description('List technicians')
-    .option('--all', 'Fetch all pages')
+    .option('--name <name>', 'Filter by name')
+    .option('--department <dept>', 'Filter by department')
     .option('--limit <n>', 'Limit results', parseInt)
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
-        const items = await api.list({}, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: TECH_COLUMNS, headers: TECH_HEADERS });
+        const filters = {};
+        if (options.name) filters.name = options.name;
+        if (options.department) filters.department = options.department;
+
+        const ec = (await import('../cache/index.js')).getEntityCache(globalOpts);
+        let items = await ec.findCached('techs', filters, { noCache: globalOpts.cache === false });
+
+        if (options.limit) items = items.slice(0, options.limit);
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: TECH_COLUMNS, headers: TECH_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

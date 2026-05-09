@@ -43,27 +43,40 @@ export function registerJobCommands(program) {
     .option('--all', 'Fetch all pages')
     .option('--limit <n>', 'Limit results', parseInt)
     .option('--status <status>', 'Filter by status')
-    .option('--customer <id>', 'Filter by customer ID')
-    .option('--technician <id>', 'Filter by technician ID')
-    .option('--scheduled-after <date>', 'Scheduled after date')
-    .option('--scheduled-before <date>', 'Scheduled before date')
-    .option('--completed-after <date>', 'Completed after date')
-    .option('--completed-before <date>', 'Completed before date')
+    .option('--customer <name>', 'Filter by customer name')
+    .option('--customer-id <id>', 'Filter by customer ID')
+    .option('--tech <name>', 'Filter by technician name')
+    .option('--city <city>', 'Filter by service city')
+    .option('--state <state>', 'Filter by service state')
+    .option('--zip <zip>', 'Filter by service zip')
+    .option('--date-range <range>', 'Filter by date range (YYYY-MM-DD..YYYY-MM-DD)')
+    .option('--min-total <n>', 'Minimum total', parseFloat)
+    .option('--max-total <n>', 'Maximum total', parseFloat)
+    .option('--select <fields>', 'Select specific fields (comma-separated)')
     .action(async (options) => {
       const globalOpts = program.opts();
       try {
-        const { api } = initApi(globalOpts);
-        const params = {};
-        if (options.status) params.status = options.status;
-        if (options.customer) params.customer_id = options.customer;
-        if (options.technician) params.technician_id = options.technician;
-        if (options.scheduledAfter) params.scheduled_after = options.scheduledAfter;
-        if (options.scheduledBefore) params.scheduled_before = options.scheduledBefore;
-        if (options.completedAfter) params.completed_after = options.completedAfter;
-        if (options.completedBefore) params.completed_before = options.completedBefore;
+        const filters = {};
+        if (options.status) filters.status = options.status;
+        if (options.customer) filters.customerName = options.customer;
+        if (options.customerId) filters.customer_id = parseInt(options.customerId, 10);
+        if (options.tech) filters.tech = options.tech;
+        if (options.city) filters.city = options.city;
+        if (options.state) filters.state = options.state;
+        if (options.zip) filters.zip = options.zip;
+        if (options.dateRange) {
+          const [from, to] = options.dateRange.split('..');
+          if (from) filters.dateFrom = from;
+          if (to) filters.dateTo = to;
+        }
+        if (options.minTotal !== undefined) filters.minTotal = options.minTotal;
+        if (options.maxTotal !== undefined) filters.maxTotal = options.maxTotal;
 
-        const items = await api.list(params, { all: options.all, limit: options.limit });
-        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS });
+        const ec = (await import('../cache/index.js')).getEntityCache(globalOpts);
+        let items = await ec.findCached('jobs', filters, { noCache: globalOpts.cache === false });
+
+        if (options.limit) items = items.slice(0, options.limit);
+        output(items, { format: globalOpts.output, sort: globalOpts.sort, columns: JOB_COLUMNS, headers: JOB_HEADERS, select: options.select });
       } catch (err) {
         console.error(chalk.red(err.message));
         process.exitCode = 1;

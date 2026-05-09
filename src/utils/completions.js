@@ -11,7 +11,7 @@ const COMMAND_TREE = {
   equipment: ['list', 'get', 'search'],
   auth: ['login', 'logout', 'whoami', 'profiles', 'add-profile', 'switch'],
   cache: ['refresh', 'status', 'clear'],
-  sync: ['fm-test', 'pull', 'push', 'run', 'status', 'log', 'conflicts', 'resolve', 'mapping', 'schedule'],
+  sync: ['fm-test', 'push', 'status', 'log', 'conflicts', 'resolve', 'mapping', 'schedule'],
   config: ['set', 'get', 'list'],
   report: ['jobs-summary', 'revenue', 'revenue-by-customer', 'revenue-by-technician', 'tech-performance', 'tech-utilization', 'customer-aging', 'customer-activity', 'new-customers', 'equipment-inventory', 'equipment-by-customer'],
   interactive: [],

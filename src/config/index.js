@@ -5,7 +5,7 @@ import { homedir } from 'os';
 
 dotenvConfig();
 
-const CONFIG_DIR = join(homedir(), '.sfcli');
+const CONFIG_DIR = process.env.SFCLI_CONFIG_DIR || join(homedir(), '.sfcli');
 
 const store = new Conf({
   projectName: 'sfcli',
